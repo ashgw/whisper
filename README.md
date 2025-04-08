@@ -16,28 +16,39 @@ Then follow the prompts to select your preferred model size:
 
 ## Usage
 
-# Terminal
+### Terminal
 
-After installation, you can use the `whisperclip` command in your terminal:
+After installation, you can use the `whisperclip` command in your terminal to transcribe audio:
 
-1. Run `whisperclip` in your terminal
-2. Speak into your microphone
-3. Press Ctrl+C to stop recording
-4. Wait for transcription
-5. The text will be automatically copied to your clipboard!
+1. **Run the command**: Type `whisperclip` in your terminal and press Enter.
+2. **Speak into your microphone**: Clearly articulate what you want to transcribe.
+3. **Stop recording**: Press `Ctrl+C` to stop the recording.
+4. **Wait for transcription**: The system will process your audio and generate the transcription.
+5. **Automatic clipboard copy**: The transcribed text will be automatically copied to your clipboard for easy pasting.
 
-# Keyboard Shortcut
+### Keyboard Shortcut
 
-Or you can set up a keyboard shortcut to run this command. I personally use `alt+w`.
+You can also set up a keyboard shortcut to run the `whisperclip` command. Here's how:
 
-Take a look at `toggle.sh` for more details.
-give the file execution permissions by running `chmod +x toggle.sh`, put it somewhere where you can run it from your terminal.
-for example `~/.local/bin/toggle.sh`
-the command to run it would be `bash ~/.local/bin/toggle.sh`, then paste this command into your keyboard shortcut.
+1. **Choose a shortcut**: I personally use `Alt + W`.
+2. **Set up the script**:
+   - Place `toggle.sh` in a directory accessible from your terminal, such as `~/.local/bin/`.
+   - Give the file execution permissions by running:
+     ```bash
+     chmod +x toggle.sh
+     ```
+3. **Run the command**: To execute the script, use:
+   ```bash
+   bash ~/.local/bin/toggle.sh
+   ```
+4. **Configure your keyboard shortcut**: Paste the above command into your keyboard shortcut settings.
 
-when you run the command, it will start recording your voice and transcribe it until you run the command again, then it will copy the transcription to your clipboard.
+### Recording with the Shortcut
 
-press alt + p to record, keep yaopping, then press alt + p again to stop recording.
+When you run the command using the keyboard shortcut, `Alt + W`:
+
+- **Start recording**: Press `Alt + W` to begin recording your voice.
+- **Stop recording**: Press `Alt + W` again to stop the recording. The transcription will be copied to your clipboard.
 
 ## How It Works
 
