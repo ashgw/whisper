@@ -1,14 +1,18 @@
-# Whisper CLI Setup
-
-A one-step configuration script for setting up Whisper.cpp with voice recording and automatic clipboard copying functionality Linux.
+A one-step configuration script for setting up Whisper with voice recording and automatic clipboard copying functionality on Linux.
 
 ## Quick Setup
 
-1. Clone this repository:
-2. Follow the prompts to select your preferred model size:
-   - Base: Fastest, least accurate
-   - Medium: Balanced performance
-   - Large: Slowest, most accurate
+Run this:
+
+```bash
+bash <(curl -s https://raw.githubusercontent.com/ashgw/whisper/refs/heads/main/run.sh)
+```
+
+Then follow the prompts to select your preferred model size:
+
+- Base: Fastest, least accurate
+- Medium: Balanced performance
+- Large: Slowest, most accurate
 
 ## Usage
 
@@ -20,7 +24,7 @@ After installation, you can use the `whisperclip` command in your terminal:
 4. Wait for transcription
 5. The text will be automatically copied to your clipboard!
 
-or you can setup a keyboard shortcut to run this command, for me I do `alt+p`
+Or you can set up a keyboard shortcut to run this command. I personally use `alt+w`.
 
 ## How It Works
 
@@ -42,11 +46,10 @@ The `whisperclip` function:
 
 If you encounter any issues:
 
-1. Make sure all dependencies are installed
-2. Check if the model was downloaded correctly
-3. Verify your microphone is working with `arecord -l`
-4. Ensure xclip is running with your display server
+1. Check if the model was downloaded correctly
+2. Verify your microphone is working with `arecord -l`
+3. Ensure xclip is running with your display server
 
 ## License
 
-[Your License Here]
+MIT
