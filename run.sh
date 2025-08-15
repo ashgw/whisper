@@ -9,13 +9,13 @@ NC='\033[0m'
 # these should be available on most linux distros
 check_dependencies() {
     local missing_deps=()
-    
+
     for dep in "git" "make" "gcc" "arecord" "xclip"; do
         if ! command -v $dep &> /dev/null; then
             missing_deps+=($dep)
         fi
     done
-    
+
     if [ ${#missing_deps[@]} -ne 0 ]; then
         echo -e "${RED}Missing dependencies: ${missing_deps[*]}${NC}"
         echo -e "${YELLOW}Installing missing dependencies...${NC}"
@@ -27,7 +27,7 @@ check_dependencies() {
 create_whisper_function() {
     local shell_rc="$1"
     local model_size="$2"
-    
+
     cat >> "$shell_rc" << EOL
 
 # u can run this from the terminal by typing whisperclip, if it doesn't show at first reload ur ~/.zshrc or ~/.bashrc file
@@ -57,13 +57,15 @@ echo -e "${YELLOW}Creating whisper directory...${NC}"
 mkdir -p ~/whisper
 cd ~/whisper
 
-echo -e "${YELLOW}Cloning whisper.cpp...${NC}"
+echo -e "${YELLOW}Cloning whisper.cpp at pinned commit...${NC}"
 git clone https://github.com/ggml-org/whisper.cpp
 cd whisper.cpp
+git checkout 040510a132f0a9b51d4692b57a6abfd8c9660696
 echo -e "${YELLOW}Building whisper.cpp...${NC}"
 make
+>
 
-# this model will be your base, run /models/download-ggml-model.sh medium.en for exmaple to get the model manually 
+# this model will be your base, run /models/download-ggml-model.sh medium.en for exmaple to get the model manually
 # model types can be found here https://github.com/ggerganov/whisper.cpp/blob/master/models/README.md
 echo -e "${BLUE}Select model size:${NC}"
 echo "1) Base (fastest, least accurate)"
