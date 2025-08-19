@@ -5,7 +5,7 @@ A one-step configuration script for setting up Whisper with voice recording and 
 Run this:
 
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/ashgw/whisper/refs/heads/main/run.sh)
+bash <(curl -s https://raw.githubusercontent.com/ashgw/whisper/refs/heads/main/run)
 ```
 
 Then follow the prompts to select your preferred model size:
@@ -32,14 +32,14 @@ You can also set up a keyboard shortcut to run the `whisperclip` command. Here's
 
 1. **Choose a shortcut**: I personally use `Alt + W`.
 2. **Set up the script**:
-   - Place `toggle.sh` in a directory accessible from your terminal, such as `~/.local/bin/`.
+   - Place `toggle` in a directory accessible from your terminal, such as `~/.local/bin/`.
    - Give the file execution permissions by running:
      ```bash
-     chmod +x toggle.sh
+     chmod +x toggle
      ```
 3. **Run the command**: To execute the script, use:
    ```bash
-   bash ~/.local/bin/toggle.sh
+   bash ~/.local/bin/toggle
    ```
 4. **Configure your keyboard shortcut**: Paste the above command into your keyboard shortcut settings.
 
@@ -77,3 +77,4 @@ If you encounter any issues:
 ## License
 
 MIT
+
