@@ -1,102 +1,302 @@
-#!/bin/bash
+#!/usr/bin/env zsh
+# Elite zsh installer + runner for ggml-org/whisper.cpp on Debian/Ubuntu
+# - Idempotent re-runs
+# - Hyprland friendly: wl-copy preferred, xclip fallback
+# - fzf model picker, bat preview (optional)
+# - Models:   ~/.local/share/whisper/models
+# - Sources:  ~/.local/opt/whisper.cpp
+# - Binaries: ~/.local/opt/whisper.cpp/build/bin
+# - Runner:   ~/.local/bin/whisperclip
+# - Adds w() to ~/.zshrc once
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+set -e
+set -u
+set -o pipefail
 
-# these should be available on most linux distros
-check_dependencies() {
-    local missing_deps=()
+# ---------- UI ----------
+autoload -Uz colors zmodload
+colors
+_hr(){ print -P "%F{8}------------------------------------------------------------%f"; }
+log(){  print -P "%F{4}[*]%f $*"; }
+ok(){   print -P "%F{2}[ok]%f $*"; }
+warn(){ print -P "%F{3}[warn]%f $*"; }
+err(){  print -P "%F{1}[err]%f $*"; }
 
-    for dep in "git" "make" "gcc" "arecord" "xclip"; do
-        if ! command -v $dep &> /dev/null; then
-            missing_deps+=($dep)
-        fi
-    done
+[[ ${EUID} -ne 0 ]] || { err "Run as your user, not root"; exit 1; }
 
-    if [ ${#missing_deps[@]} -ne 0 ]; then
-        echo -e "${RED}Missing dependencies: ${missing_deps[*]}${NC}"
-        echo -e "${YELLOW}Installing missing dependencies...${NC}"
-        sudo apt-get update
-        sudo apt-get install -y ${missing_deps[@]}
+# ---------- Args ----------
+# Defaults
+typeset -g MODEL_SLUG="base.en"   # tiny.en base.en small.en medium.en large-v3 large-v3-turbo
+typeset -g WITH_VAD=0
+typeset -g INSTALL_FUNC=1
+typeset -g PREFIX="$HOME/.local"
+
+# Simple long-option parser for zsh
+while (( $# > 0 )); do
+  case "$1" in
+    --model)        MODEL_SLUG="${2:-base.en}"; shift 2 ;;
+    --with-vad)     WITH_VAD=1; shift ;;
+    --no-func)      INSTALL_FUNC=0; shift ;;
+    --prefix)       PREFIX="${2:-$HOME/.local}"; shift 2 ;;
+    -h|--help)
+      cat <<EOF
+Usage: $0 [--model <slug>] [--with-vad] [--no-func] [--prefix <path>]
+Defaults: --model base.en  --prefix \$HOME/.local
+EOF
+      exit 0
+      ;;
+    *) err "Unknown arg: $1"; exit 1 ;;
+  esac
+done
+
+# ---------- Paths ----------
+typeset -g ROOT="$PREFIX/opt/whisper.cpp"
+typeset -g BUILD="$ROOT/build"
+typeset -g BIN_DIR="$PREFIX/bin"
+typeset -g MODELS="$PREFIX/share/whisper/models"
+typeset -g CLI="$BUILD/bin/whisper-cli"
+typeset -g STREAM="$BUILD/bin/whisper-stream"
+typeset -g RUNNER="$BIN_DIR/whisperclip"
+typeset -g VAD_FILE="$MODELS/ggml-silero-v5.1.2.bin"
+
+mkdir -p "$BIN_DIR" "$MODELS" "$PREFIX/opt"
+
+_hr
+print -P "🎯 %F{12}Whisper.cpp setup%f"
+print -P "%F{8}repo:%f   $ROOT"
+print -P "%F{8}models:%f $MODELS"
+_hr
+
+# ---------- Helpers ----------
+_have(){ command -v "$1" >/dev/null 2>&1; }
+_pkg(){ dpkg -s "$1" >/dev/null 2>&1; }
+apt_install_missing(){
+  local pkgs=()
+  for p in "$@"; do _pkg "$p" || pkgs+=("$p"); done
+  if (( ${#pkgs[@]} )); then
+    log "Installing APT deps: ${pkgs[*]}"
+    sudo apt-get update -y
+    sudo apt-get install -y "${pkgs[@]}"
+  else
+    ok "APT deps already present"
+  fi
+}
+ensure_path_export(){
+  if ! print -r -- "$PATH" | grep -q "$HOME/.local/bin"; then
+    if [[ -f "$HOME/.zshrc" ]] && ! grep -q 'export PATH="\$HOME/.local/bin' "$HOME/.zshrc"; then
+      print 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
+      ok "Added ~/.local/bin to PATH in ~/.zshrc"
+    else
+      warn "Add ~/.local/bin to PATH manually if needed"
     fi
+  fi
 }
 
-create_whisper_function() {
-    local shell_rc="$1"
-    local model_size="$2"
+# ---------- Deps ----------
+# Build + audio + clipboard + fzf + bat + SDL2 for stream demo
+apt_install_missing build-essential cmake git pkg-config alsa-utils wl-clipboard xclip fzf bat libsdl2-dev ca-certificates curl
 
-    cat >> "$shell_rc" << EOL
-
-# u can run this from the terminal by typing whisperclip, if it doesn't show at first reload ur ~/.zshrc or ~/.bashrc file
-whisperclip() {
-    local AUDIO_PATH="/tmp/record.wav"
-    local MODEL_PATH="\$HOME/whisper/whisper.cpp/models/ggml-${model_size}.en.bin"
-    local WHISPER_BIN="\$HOME/whisper/whisper.cpp/main"
-
-    echo -e "\e[1;34m🎙️ Recording... Press Ctrl+C to stop.\e[0m"
-
-    arecord -f cd -t wav -r 16000 -c 1 "\$AUDIO_PATH" &
-    local RECORD_PID=\$!
-
-    trap "kill \$RECORD_PID; wait \$RECORD_PID 2>/dev/null; echo -e '\n🧠 Transcribing...'; \$WHISPER_BIN -m \$MODEL_PATH -f \$AUDIO_PATH -otxt && cat \${AUDIO_PATH}.txt && xclip -selection clipboard -i \${AUDIO_PATH}.txt && echo -e '\n✅ Done. Copied to clipboard.'; trap - INT" INT
-
-    wait \$RECORD_PID
-}
-EOL
-}
-
-echo -e "${BLUE}🎯 Starting Whisper.cpp Setup${NC}"
-
-echo -e "${YELLOW}Checking dependencies...${NC}"
-check_dependencies
-
-echo -e "${YELLOW}Creating whisper directory...${NC}"
-mkdir -p ~/whisper
-cd ~/whisper
-
-echo -e "${YELLOW}Cloning whisper.cpp at pinned commit...${NC}"
-git clone https://github.com/ggml-org/whisper.cpp
-cd whisper.cpp
-git checkout 040510a132f0a9b51d4692b57a6abfd8c9660696
-echo -e "${YELLOW}Building whisper.cpp...${NC}"
-make
->
-
-# this model will be your base, run /models/download-ggml-model.sh medium.en for exmaple to get the model manually
-# model types can be found here https://github.com/ggerganov/whisper.cpp/blob/master/models/README.md
-echo -e "${BLUE}Select model size:${NC}"
-echo "1) Base (fastest, least accurate)"
-echo "2) Medium (balanced)"
-echo "3) Large (slowest, most accurate)"
-read -p "Enter your choice (1-3): " model_choice
-
-case $model_choice in
-    1) model_size="base";;
-    2) model_size="medium";;
-    3) model_size="large";;
-    *) echo -e "${RED}Invalid choice. Using base model.${NC}"; model_size="base";;
-esac
-
-echo -e "${YELLOW}Downloading ${model_size} model...${NC}"
-./models/download-ggml-model.sh ${model_size}.en
-
-echo -e "${BLUE}Detecting shell...${NC}"
-if [ -f "$HOME/.zshrc" ]; then
-    shell_rc="$HOME/.zshrc"
-    echo -e "${GREEN}Found Zsh${NC}"
-elif [ -f "$HOME/.bashrc" ]; then
-    shell_rc="$HOME/.bashrc"
-    echo -e "${GREEN}Found Bash${NC}"
+# ---------- Clone or update ----------
+if [[ -d "$ROOT/.git" ]]; then
+  log "Updating repo at $ROOT"
+  git -C "$ROOT" fetch --all --tags --prune
+  git -C "$ROOT" pull --ff-only
 else
-    echo -e "${RED}No supported shell configuration found${NC}"
-    exit 1
+  log "Cloning ggml-org/whisper.cpp"
+  git clone https://github.com/ggml-org/whisper.cpp.git "$ROOT"
 fi
 
-echo -e "${YELLOW}Adding whisperclip function to ${shell_rc}...${NC}"
-create_whisper_function "$shell_rc" "$model_size"
+# ---------- Build ----------
+log "Building (Release)..."
+cmake -S "$ROOT" -B "$BUILD" -DCMAKE_BUILD_TYPE=Release >/dev/null
+cmake --build "$BUILD" -j"$(nproc)" --config Release >/dev/null
+[[ -x "$CLI" ]] && ok "Built whisper-cli" || { err "Build failed"; exit 1; }
+[[ -x "$STREAM" ]] && ok "Built whisper-stream" || warn "whisper-stream not found"
 
-echo -e "${GREEN}✅ Setup complete!${NC}"
-echo -e "${BLUE}Please restart your terminal or run: source ${shell_rc}${NC}"
+# ---------- Model picker (fzf UX) ----------
+_pick_list=(
+  "tiny.en    | 75 MiB | fastest, lower accuracy"
+  "base.en    | 142 MiB | fast"
+  "small.en   | 466 MiB | good"
+  "medium.en  | 1.5 GiB | very good"
+  "large-v3   | 2.9 GiB | highest accuracy, multi-lang"
+  "large-v3-turbo | faster large, multi-lang"
+)
+_to_slug(){ case "$1" in
+  tiny.en*) echo tiny.en ;;
+  base.en*) echo base.en ;;
+  small.en*) echo small.en ;;
+  medium.en*) echo medium.en ;;
+  large-v3\ *|large-v3) echo large-v3 ;;
+  large-v3-turbo*) echo large-v3-turbo ;;
+  *) echo base.en ;;
+esac }
+
+if _have fzf; then
+  log "Select model in fzf (Enter to confirm)"
+  local choice; choice=$(printf '%s\n' "${_pick_list[@]}" | fzf --ansi --prompt='model > ' --height=12 --border --preview-window=down,3 --preview='echo {}') || true
+  [[ -n "${choice:-}" ]] && MODEL_SLUG="$(_to_slug "$choice")"
+else
+  warn "fzf not found, using --model ${MODEL_SLUG}"
+fi
+ok "Model -> $MODEL_SLUG"
+
+# ---------- Download model (idempotent) ----------
+typeset -g MODEL_FILE="$MODELS/ggml-${MODEL_SLUG}.bin"
+if [[ ! -s "$MODEL_FILE" ]]; then
+  log "Downloading model to $MODEL_FILE"
+  ( cd "$ROOT" && sh ./models/download-ggml-model.sh "$MODEL_SLUG" "$MODELS" )
+  [[ -s "$MODEL_FILE" ]] && ok "Model ready: $(basename "$MODEL_FILE")" || { err "Model download failed"; exit 1; }
+else
+  ok "Model already present: $(basename "$MODEL_FILE")"
+fi
+
+# ---------- Optional VAD ----------
+if (( WITH_VAD == 1 )); then
+  if [[ ! -s "$VAD_FILE" ]]; then
+    log "Downloading Silero VAD -> $VAD_FILE"
+    ( cd "$MODELS" && sh "$ROOT/models/download-vad-model.sh" silero-v5.1.2 ) || true
+    [[ -s "$VAD_FILE" ]] && ok "VAD ready" || warn "VAD download did not produce $VAD_FILE"
+  else
+    ok "VAD already present"
+  fi
+fi
+
+# ---------- Install runner (zsh) ----------
+log "Installing runner -> $RUNNER"
+cat > "$RUNNER" <<'EOF'
+#!/usr/bin/env zsh
+set -e
+set -u
+set -o pipefail
+
+ROOT="$HOME/.local/opt/whisper.cpp"
+MODELS="$HOME/.local/share/whisper/models"
+CLI="$ROOT/build/bin/whisper-cli"
+
+_copy_clip(){ if command -v wl-copy >/dev/null 2>&1; then wl-copy
+elif command -v xclip >/dev/null 2>&1; then xclip -selection clipboard
+else cat >/dev/null; fi }
+_show(){ if command -v bat >/dev/null 2>&1; then bat -pp --wrap=never "$1"; else cat "$1"; fi }
+
+# pick newest model if not set
+model="${WHISPER_MODEL:-}"
+[[ -z "$model" ]] && model="$(ls -t "$MODELS"/ggml-*.bin 2>/dev/null | head -n1 || true)"
+[[ -n "$model" ]] || { print -P "%F{1}[err]%f no models in $MODELS"; exit 1; }
+[[ -x "$CLI" ]] || { print -P "%F{1}[err]%f whisper-cli not found at $CLI"; exit 1; }
+
+threads="${WHISPER_THREADS:-$(nproc)}"
+ts="$(date +%Y-%m-%d_%H-%M-%S)"
+AUDIO="/tmp/whisper_${ts}.wav"
+OUT="/tmp/whisper_${ts}"
+
+print -P "%F{6}🎙️  Recording...%f %F{8}(Ctrl+C to stop)%f"
+# 16-bit PCM, 16 kHz, mono
+arecord -q -f S16_LE -r 16000 -c 1 "$AUDIO" &
+recpid=$!
+
+trap '
+  kill $recpid >/dev/null 2>&1 || true
+  wait $recpid 2>/dev/null || true
+  print -P "\n%F{6}🧠 Transcribing...%f"
+  args=(-m "$model" -f "$AUDIO" -t "$threads" -otxt -of "$OUT")
+  case "$(basename "$model")" in *".en.bin") args+=(-l en);; esac
+  [[ -n "${WHISPER_LANG:-}" ]] && args+=(-l "$WHISPER_LANG")
+  if [[ "${WHISPER_VAD:-0}" = "1" ]]; then
+    vad="${WHISPER_VAD_MODEL:-$MODELS/ggml-silero-v5.1.2.bin}"
+    [[ -s "$vad" ]] && args+=(--vad --vad-model "$vad")
+  fi
+  "$CLI" "${args[@]}" >/dev/null
+  TXT="${OUT}.txt"
+  if [[ -s "$TXT" ]]; then
+    print -P "%F{8}------------------------------------------------------------%f"
+    _show "$TXT" | tee /dev/tty | _copy_clip
+    print -P "%F{8}------------------------------------------------------------%f"
+    print -P "%F{2}[ok]%f Copied to clipboard"
+  else
+    print -P "%F{1}[err]%f No output"
+  fi
+  rm -f "$AUDIO" >/dev/null 2>&1 || true
+  trap - INT
+' INT
+
+wait $recpid
+EOF
+chmod +x "$RUNNER"
+ok "Runner installed: whisperclip"
+
+# ---------- Ensure PATH ----------
+ensure_path_export
+
+# ---------- Add your w() once ----------
+if (( INSTALL_FUNC == 1 )) && [[ -f "$HOME/.zshrc" ]]; then
+  if ! grep -q '>>> whisper.w function >>>' "$HOME/.zshrc"; then
+    log "Adding w() to ~/.zshrc"
+    cat >> "$HOME/.zshrc" <<'ZRC'
+# >>> whisper.w function >>>
+w() {
+  set -e
+  set -u
+  set -o pipefail
+  local WHISPER_DIR="${WHISPER_DIR:-$HOME/.local/opt/whisper.cpp}"
+  local WHISPER_BIN="${WHISPER_CLI:-$WHISPER_DIR/build/bin/whisper-cli}"
+  local MODELS_DIR="${WHISPER_MODELS:-$HOME/.local/share/whisper/models}"
+  local MODEL_PATH="${WHISPER_MODEL:-$MODELS_DIR/ggml-base.en.bin}"
+
+  command -v arecord >/dev/null || { print -P "%F{1}[err]%f arecord missing"; return 1; }
+  [[ -x "$WHISPER_BIN" ]] || { print -P "%F{1}[err]%f whisper-cli not found"; return 1; }
+  [[ -s "$MODEL_PATH"  ]] || { print -P "%F{1}[err]%f model not found at $MODEL_PATH"; return 1; }
+
+  _copy_clip(){ if command -v wl-copy >/dev/null 2>&1; then wl-copy
+  elif command -v xclip >/dev/null 2>&1; then xclip -selection clipboard
+  else cat >/dev/null; fi }
+
+  local ts; ts="$(date +%Y%m%d_%H%M%S)"
+  local AUDIO="/tmp/record_${ts}.wav"
+  local OUT="/tmp/record_${ts}"
+
+  print -P "%F{6}🎙️  Recording...%f %F{8}(Ctrl+C to stop)%f"
+  arecord -q -f S16_LE -r 16000 -c 1 "$AUDIO" &
+  local REC_PID=$!
+
+  trap '
+    kill $REC_PID >/dev/null 2>&1 || true
+    wait $REC_PID 2>/dev/null || true
+    print -P "\n%F{6}🧠 Transcribing...%f"
+    local threads="${WHISPER_THREADS:-$(nproc)}"
+    local args=(-m "$MODEL_PATH" -f "$AUDIO" -t "$threads" -otxt -of "$OUT")
+    case "$(basename "$MODEL_PATH")" in *".en.bin") args+=(-l en);; esac
+    [[ -n "${WHISPER_LANG:-}" ]] && args+=(-l "$WHISPER_LANG")
+    if [[ "${WHISPER_VAD:-0}" = "1" ]]; then
+      local vad="${WHISPER_VAD_MODEL:-$MODELS_DIR/ggml-silero-v5.1.2.bin}"
+      [[ -s "$vad" ]] && args+=(--vad --vad-model "$vad")
+    fi
+    "$WHISPER_BIN" "${args[@]}" >/dev/null
+    local TXT="${OUT}.txt"
+    if [[ -s "$TXT" ]]; then
+      cat "$TXT" | tee /dev/tty | _copy_clip
+      print -P "%F{2}[ok]%f Copied to clipboard"
+    else
+      print -P "%F{1}[err]%f No output"
+    fi
+    rm -f "$AUDIO" >/dev/null 2>&1 || true
+    trap - INT
+  ' INT
+
+  wait $REC_PID
+}
+# <<< whisper.w function <<<
+ZRC
+    ok "w() added"
+  else
+    ok "w() already present"
+  fi
+fi
+
+_hr
+ok "Setup complete"
+print -P "Run: %Bwhisperclip%b  %F{8}(Ctrl+C to stop)%f"
+print -P "Env: %BWHISPER_THREADS%b  %BWHISPER_LANG%b  %BWHISPER_VAD=1%b  %BWHISPER_VAD_MODEL%b"
+print -P "Realtime demo: %B$STREAM -m $MODEL_FILE --step 500 --length 5000%b"
+_hr
+
