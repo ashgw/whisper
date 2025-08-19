@@ -96,14 +96,18 @@ ensure_path_export(){
 # Build + audio + clipboard + fzf + bat + SDL2 for stream demo
 apt_install_missing build-essential cmake git pkg-config alsa-utils wl-clipboard xclip fzf bat libsdl2-dev ca-certificates curl
 
+
+SHA="040510a132f0a9b51d4692b57a6abfd8c9660696"
+
 # ---------- Clone or update ----------
 if [[ -d "$ROOT/.git" ]]; then
   log "Updating repo at $ROOT"
   git -C "$ROOT" fetch --all --tags --prune
-  git -C "$ROOT" pull --ff-only
+  git -C "$ROOT" checkout "$SHA"
 else
   log "Cloning ggml-org/whisper.cpp"
   git clone https://github.com/ggml-org/whisper.cpp.git "$ROOT"
+  git -C "$ROOT" checkout "$SHA"
 fi
 
 # ---------- Build ----------

@@ -1,78 +1,60 @@
-A one-step configuration script for setting up Whisper with voice recording and automatic clipboard copying functionality on Linux.
+# Whisper Toggle (Linux)
+
+One-step setup for whisper with live mic recording and auto-clipboard transcription.
 
 ## Quick Setup
 
-Run this:
-
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/ashgw/whisper/refs/heads/main/run)
-```
+bash <(curl -s https://raw.githubusercontent.com/ashgw/whisper/refs/heads/main/setup)
+````
 
-Then follow the prompts to select your preferred model size:
+Pick your model size:
 
-- Base: Fastest, least accurate
-- Medium: Balanced performance
-- Large: Slowest, most accurate
+* **Base** – fastest
+* **Medium** – balanced
+* **Large** – most accurate
 
 ## Usage
+Run:
 
-### Terminal
+```bash
+w
+```
+* Speak into your mic
+* Press **Ctrl+C** to stop
+* Transcription is copied to your clipboard
 
-After installation, you can use the `whisperclip` command in your terminal to transcribe audio:
+### Keybind Toggle
 
-1. **Run the command**: Type `whisperclip` in your terminal and press Enter.
-2. **Speak into your microphone**: Clearly articulate what you want to transcribe.
-3. **Stop recording**: Press `Ctrl+C` to stop the recording.
-4. **Wait for transcription**: The system will process your audio and generate the transcription.
-5. **Automatic clipboard copy**: The transcribed text will be automatically copied to your clipboard for easy pasting.
+Install the toggle script:
 
-### Keyboard Shortcut
+```bash
+chmod +x ~/.local/bin/toggle
+```
 
-You can also set up a keyboard shortcut to run the `whisperclip` command. Here's how:
+Bind it to a key (example `Alt+W`).
 
-1. **Choose a shortcut**: I personally use `Alt + W`.
-2. **Set up the script**:
-   - Place `toggle` in a directory accessible from your terminal, such as `~/.local/bin/`.
-   - Give the file execution permissions by running:
-     ```bash
-     chmod +x toggle
-     ```
-3. **Run the command**: To execute the script, use:
-   ```bash
-   bash ~/.local/bin/toggle
-   ```
-4. **Configure your keyboard shortcut**: Paste the above command into your keyboard shortcut settings.
+Using Hyprland for example:
+```ini
+bind = ALT, W, exec, /home/youruser/.local/bin/toggle
+```
 
-### Recording with the Shortcut
+Reload config:
 
-When you run the command using the keyboard shortcut, `Alt + W`:
+```bash
+hyprctl reload
+```
 
-- **Start recording**: Press `Alt + W` to begin recording your voice.
-- **Stop recording**: Press `Alt + W` again to stop the recording. The transcription will be copied to your clipboard.
+Now:
 
-## How It Works
-
-The setup script:
-
-1. Creates a whisper directory in your home folder
-2. Clones and builds whisper.cpp
-3. Downloads your chosen model
-4. Adds the `whisperclip` function to your shell configuration
-5. Installs any missing dependencies
-
-The `whisperclip` function:
-
-1. Records audio using `arecord`
-2. Transcribes using Whisper.cpp
-3. Automatically copies the transcription to your clipboard
+* **First press** → start recording
+* **Second press** → stop + transcribe + copy
 
 ## Troubleshooting
 
-If you encounter any issues:
-
-1. Check if the model was downloaded correctly
-2. Verify your microphone is working with `arecord -l`
-3. Ensure xclip is running with your display server
+* Ensure your model exists in `~/.local/share/whisper/models`
+* Check mic devices: `arecord -l`
+* Clipboard requires `wl-copy` (Wayland) or `xclip` (X11)
 
 ## License
 
