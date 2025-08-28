@@ -42,7 +42,7 @@ bind = ALT, W, exec, /home/youruser/.local/bin/toggle
 Reload config:
 
 ```bash
-hyprctl reload
+hyprctl reload && hyprctl binds
 ```
 
 Now:
